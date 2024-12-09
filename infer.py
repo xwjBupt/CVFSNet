@@ -147,32 +147,8 @@ def infer(
         state = "val"
         csvname = os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
-            cfg.DATA.Val.Class + "_renamed_results.csv",
+            cfg.DATA.Val.Class + "_results.csv",
         )
-
-        # if (
-        #     cfg.DATA.get("Test")
-        #     and state == "test"
-        #     and "Tri" in cfg.DATA.Train.DataPara.json_file_dir
-        # ):
-        #     logger.info("\n\n >>> Infer on {} <<<".format(cfg.DATA.Test))
-        #     infer_dataloader = build_loader(cfg.DATA.Test)
-        #     csvname = os.path.join(
-        #         os.path.dirname(os.path.realpath(__file__)),
-        #         cfg.DATA.Val.Class + "_renamed_results.csv",
-        #     )
-
-        # else:
-        #     logger.info("\n\n >>> Infer on {} <<<".format(cfg.DATA.Val))
-        #     infer_dataloader = build_loader(cfg.DATA.Val)
-        #     if "All" in cfg.DATA.Train.DataPara.json_file_dir:
-        #         state = "val"
-        #     else:
-        #         state = "test"
-        # if state == "test":
-
-        # else:
-        #     csvname = None
         tbar = tqdm(infer_dataloader, dynamic_ncols=True)
         metrics = MetricLogger()
         gt_labels = []
