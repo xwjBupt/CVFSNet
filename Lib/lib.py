@@ -245,7 +245,7 @@ def git_commit(
         + cid
         + " <<<"
     )
-    record_commit_info = " COMMIT TAG [\n%s]\n" % commit_tag
+    record_commit_info = "\n" + "***" * 10 + "\n%s\n" % commit_tag + "***" * 10 + "\n"
     return record_commit_info
 
 

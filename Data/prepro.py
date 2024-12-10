@@ -12,12 +12,22 @@ import random
 import pickle
 import torch
 import torch.nn.functional as F
+import argparse
 from Lib.lib import read_pickle, write_pickle, right_replace, write_json
 
 if __name__ == "__main__":
-    visuals = [256]
-    temporals = [8, 16, 24, 32]
-    dcms_dir = "/ai/mnt/data/dicom/pair/"  # need to be set
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "dcm_dir",
+        help="the path of raw dicom files",
+        type=str,
+    )
+    parser.add_argument("--time_depth", default=[8, 16, 24, 32], nargs="+", type=int)
+    parser.add_argument("--visual_size", default=[256], nargs="+", type=int)
+    args = parser.parse_args()
+    dcms_dir = args.dcm_dir
+    visuals = args.visual_size
+    temporals = args.time_depth
     dcms = glob.glob(dcms_dir + "/*.dcm")
     env = lmdb.open(os.path.realpath(__file__), map_size=1099511627776)
     lib = env.begin(write=True)

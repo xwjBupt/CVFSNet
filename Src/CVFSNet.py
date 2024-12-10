@@ -2689,7 +2689,7 @@ class SideOut(nn.Module):
         return x
 
 
-class DVCNet(nn.Module):
+class CVFSNet(nn.Module):
     def __init__(
         self,
         input_channel: int = 3,
@@ -2747,7 +2747,7 @@ class DVCNet(nn.Module):
         save_logit: bool = False,
         **kwargs,
     ):
-        super(DVCNet, self).__init__()
+        super(CVFSNet, self).__init__()
         self.use_marc = use_marc
         self.use_fusion = use_fusion
         self.loaded_keys = {}
@@ -3078,7 +3078,7 @@ if __name__ == "__main__":
     visual = 256
     cor_view = torch.autograd.Variable(torch.rand(2, 3, depth, visual, visual))
     sag_view = torch.autograd.Variable(torch.rand(2, 3, depth, visual, visual))
-    net = DVCNet(
+    net = CVFSNet(
         input_clip_length=depth,
         input_crop_size=visual,
         cor_pretrained=None,  # "/ai/mnt/code/DSFNet_MTICI/Src/X3D_M-Kinect.pyth",  # "/ai/mnt/code/DSFNet_MTICI/output_runs/mTICI_Single_LMDB/X3D/SINGLE_VIEW-COR-Fold1/03_30-22_32#oversample_weighted-fixnormvalue-crop-lmdb-visual32-use_marc-NLrs/Model/Best_Acc_Epoch_0080.pth",

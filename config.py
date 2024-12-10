@@ -30,9 +30,9 @@ _C.BASIC.OVA = False
 
 _C.DATA = CN()
 _C.DATA.Train = CN()
-_C.DATA.Train.Class = "mTICI_Dual"
+_C.DATA.Train.Class = "AmTICIS"
 _C.DATA.Train.DataPara = CN()
-_C.DATA.Train.DataPara.name = "mTICI_Dual_LMDB"
+_C.DATA.Train.DataPara.name = "AmTICIS"
 _C.DATA.Train.DataPara.state = "train"
 _C.DATA.Train.DataPara.json_file_dir = None
 _C.DATA.Train.DataPara.fast_time_size = 8
@@ -104,12 +104,12 @@ _C.LOSS.Para.smoothing = 0.4
 _C.LOSS.Para.keep_rate = 0.55
 _C.LOSS.Para.num_classes = num_classes
 _C.LOSS.Para.p = 0.8
-_C.LOSS.Para.q = 0.8
+_C.LOSS.Para.q = 1.0
 _C.LOSS.Para.eps = 1e-2
 
 
 _C.MODEL = CN()
-_C.MODEL.Name = "DVCNet"
+_C.MODEL.Name = "CVFSNet"
 _C.MODEL.Para = CN()
 _C.MODEL.Para.input_clip_length = _C.DATA.Train.DataPara.fast_time_size
 _C.MODEL.Para.input_crop_size = _C.DATA.Train.DataPara.visual_size

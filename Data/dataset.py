@@ -28,11 +28,11 @@ from torchsampler import ImbalancedDatasetSampler
 import copy
 
 
-class mTICI_Dual_LMDB(data.Dataset):
+class AmTICIS(data.Dataset):
     def __init__(
         self,
-        visual_size=512,
-        fast_time_size=32,
+        visual_size=256,
+        fast_time_size=8,
         state="train",
         fuse01=True,
         json_file_dir=None,
@@ -193,7 +193,7 @@ if __name__ == "__main__":
     visuals = [256]
     temporals = [24]
 
-    tici = mTICI_Dual_LMDB(
+    tici = AmTICIS(
         state="train",
         fast_time_size=24,
         visual_size=256,

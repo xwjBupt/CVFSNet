@@ -1,3 +1,3 @@
-from Data.dataset import mTICI_Dual_LMDB
+from Data.dataset import AmTICIS
 
-__all__ = ["mTICI_Dual_LMDB"]
+__all__ = ["AmTICIS"]

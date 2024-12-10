@@ -73,7 +73,7 @@ def main(cfg):
     write_yaml(root + "/" + "config.yaml", nodeTodict(cfg))
     dir_needs = [save_model]
     commit_info = (
-        "Commit INFO >>> "
+        "COMMIT INFO >>> "
         + cfg.METHOD.Name
         + "#"
         + timestamp
@@ -93,7 +93,6 @@ def main(cfg):
             reinit=True,
         )
     else:
-        os.environ["WANDB_MODE"] = "dryrun"
         logger.info("Not in debug, also using wandb On line")
         record_commit_info = git_commit(rootinroot, timestamp, commit_info=commit_info)
         logger.info(record_commit_info)

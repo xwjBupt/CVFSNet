@@ -1,5 +1,5 @@
-from Src.DVCNet import DVCNet
+from Src.CVFSNet import CVFSNet
 
 __all__ = [
-    "DVCNet",
+    "CVFSNet",
 ]
