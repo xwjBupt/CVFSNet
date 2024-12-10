@@ -797,433 +797,11 @@ def create_fusion(
     inner_act: Callable = Swish,
     **kwargs,
 ) -> nn.Module:
-    """
-    fuse_type: add,concat,cvfm, etc al
-    """
-    if fuse_type == "add":
-        return ADD(dim_in, dim_out, **kwargs)
-    elif fuse_type == "cat":
-        return CAT(dim_in, dim_out, **kwargs)
-    elif fuse_type == "cvfm":
-        return CVFM(dim_in, dim_out, **kwargs)
 
-
-class ADD(nn.Module):
-    def __init__(
-        self,
-        dim_in: int,
-        dim_inner: int,
-        dim_out: int,
-    ) -> nn.Module:
-        self.dim_in = dim_in
-        self.dim_out = dim_out
-        self.fuse_conv = create_x3d_bottleneck_block(dim_in, dim_inner, dim_out)
-
-    def forward(self, cx, sx) -> torch.Tensor:
-        return self.fuse_conv(cx + sx), None
-
-
-class DynamicADD(nn.Module):
-    def __init__(
-        self,
-        num_classes: int,
-        dim_in: int = 192,
-        dim_inner: int = 432,
-        dim_out: int = 2048,
-        # Pooling configs.
-        pool_act: Callable = nn.ReLU,
-        pool_kernel_size: Tuple[int] = (32, 16, 16),
-        # BN configs.
-        norm: Callable = nn.BatchNorm3d,
-        norm_eps: float = 1e-5,
-        norm_momentum: float = 0.1,
-        bn_lin5_on=False,
-        # Dropout configs.
-        dropout_rate: float = 0.5,
-        # Activation configs.
-        activation: bool = None,
-        # Output configs.
-        output_with_global_average: bool = False,
-    ) -> None:
-        super(DynamicADD, self).__init__()
-        self.gamma = nn.Parameter(torch.Tensor([0.5]))
-        pre_conv_module = nn.Conv3d(
-            in_channels=dim_in,
-            out_channels=dim_inner,
-            kernel_size=(1, 1, 1),
-            bias=False,
-        )
-        pre_norm_module = norm(
-            num_features=dim_inner, eps=norm_eps, momentum=norm_momentum
-        )
-        pre_act_module = None if pool_act is None else pool_act()
-
-        if pool_kernel_size is None:
-            pool_module = nn.AdaptiveAvgPool3d((1, 1, 1))
-        else:
-            pool_module = nn.AvgPool3d(pool_kernel_size, stride=1)
-
-        post_conv_module = nn.Conv3d(
-            in_channels=dim_inner,
-            out_channels=dim_out,
-            kernel_size=(1, 1, 1),
-            bias=False,
-        )
-
-        if bn_lin5_on:
-            post_norm_module = norm(
-                num_features=dim_out, eps=norm_eps, momentum=norm_momentum
-            )
-        else:
-            post_norm_module = None
-        post_act_module = None if pool_act is None else pool_act()
-
-        projected_pool_module = ProjectedPool(
-            pre_conv=pre_conv_module,
-            pre_norm=pre_norm_module,
-            pre_act=pre_act_module,
-            pool=pool_module,
-            post_conv=post_conv_module,
-            post_norm=post_norm_module,
-            post_act=post_act_module,
-        )
-
-        if activation is None:
-            activation_module = None
-        elif activation == nn.Softmax:
-            activation_module = activation(dim=1)
-        elif activation == nn.Sigmoid:
-            activation_module = activation()
-        else:
-            raise NotImplementedError(
-                "{} is not supported as an activation" "function.".format(activation)
-            )
-
-        if output_with_global_average:
-            output_pool = nn.AdaptiveAvgPool3d(1)
-            proj_linear = nn.Linear(dim_out, num_classes, bias=True)
-        else:
-            proj_linear = None
-            output_pool = None
-        self.fuse_conv = ResNetBasicHead(
-            proj=proj_linear,
-            activation=activation_module,
-            pool=projected_pool_module,
-            dropout=nn.Dropout(dropout_rate) if dropout_rate > 0 else None,
-            output_pool=output_pool,
-        )
-
-    def forward(self, cx, sx) -> torch.Tensor:
-        return self.fuse_conv(cx[-2] + self.gamma * sx[-2]), None
-
-
-class TMP_ADD(nn.Module):
-    def __init__(
-        self,
-        num_classes: int,
-        dim_in: int = 192,
-        dim_inner: int = 432,
-        dim_out: int = 2048,
-        # Pooling configs.
-        pool_act: Callable = nn.ReLU,
-        pool_kernel_size: Tuple[int] = (32, 16, 16),
-        # BN configs.
-        norm: Callable = nn.BatchNorm3d,
-        norm_eps: float = 1e-5,
-        norm_momentum: float = 0.1,
-        bn_lin5_on=False,
-        # Dropout configs.
-        dropout_rate: float = 0.5,
-        # Activation configs.
-        activation: bool = None,
-        # Output configs.
-        output_with_global_average: bool = False,
-    ) -> None:
-        super(TMP_ADD, self).__init__()
-        pre_conv_module = nn.Conv3d(
-            in_channels=dim_in,
-            out_channels=dim_inner,
-            kernel_size=(1, 1, 1),
-            bias=False,
-        )
-        pre_norm_module = norm(
-            num_features=dim_inner, eps=norm_eps, momentum=norm_momentum
-        )
-        pre_act_module = None if pool_act is None else pool_act()
-
-        if pool_kernel_size is None:
-            pool_module = nn.AdaptiveAvgPool3d((1, 1, 1))
-        else:
-            pool_module = nn.AvgPool3d(pool_kernel_size, stride=1)
-
-        post_conv_module = nn.Conv3d(
-            in_channels=dim_inner,
-            out_channels=dim_out,
-            kernel_size=(1, 1, 1),
-            bias=False,
-        )
-
-        if bn_lin5_on:
-            post_norm_module = norm(
-                num_features=dim_out, eps=norm_eps, momentum=norm_momentum
-            )
-        else:
-            post_norm_module = None
-        post_act_module = None if pool_act is None else pool_act()
-
-        projected_pool_module = ProjectedPool(
-            pre_conv=pre_conv_module,
-            pre_norm=pre_norm_module,
-            pre_act=pre_act_module,
-            pool=pool_module,
-            post_conv=post_conv_module,
-            post_norm=post_norm_module,
-            post_act=post_act_module,
-        )
-
-        if activation is None:
-            activation_module = None
-        elif activation == nn.Softmax:
-            activation_module = activation(dim=1)
-        elif activation == nn.Sigmoid:
-            activation_module = activation()
-        else:
-            raise NotImplementedError(
-                "{} is not supported as an activation" "function.".format(activation)
-            )
-
-        if output_with_global_average:
-            output_pool = nn.AdaptiveAvgPool3d(1)
-            proj_linear = nn.Linear(dim_out, num_classes, bias=True)
-        else:
-            proj_linear = None
-            output_pool = None
-        self.fuse_conv = ResNetBasicHead(
-            proj=proj_linear,
-            activation=activation_module,
-            pool=projected_pool_module,
-            dropout=nn.Dropout(dropout_rate) if dropout_rate > 0 else None,
-            output_pool=output_pool,
-        )
-
-    def forward(self, cx, sx) -> torch.Tensor:
-        return self.fuse_conv(cx[-2] + sx[-2])
-
-
-class TMP_CAT(nn.Module):
-    def __init__(
-        self,
-        num_classes: int,
-        dim_in: int = 192,
-        dim_inner: int = 432,
-        dim_out: int = 2048,
-        # Pooling configs.
-        pool_act: Callable = nn.ReLU,
-        pool_kernel_size: Tuple[int] = (32, 16, 16),
-        # BN configs.
-        norm: Callable = nn.BatchNorm3d,
-        norm_eps: float = 1e-5,
-        norm_momentum: float = 0.1,
-        bn_lin5_on=False,
-        # Dropout configs.
-        dropout_rate: float = 0.5,
-        # Activation configs.
-        activation: bool = None,
-        # Output configs.
-        output_with_global_average: bool = False,
-    ) -> None:
-        super(TMP_CAT, self).__init__()
-        pre_conv_module = nn.Conv3d(
-            in_channels=2 * dim_in,
-            out_channels=dim_inner,
-            kernel_size=(1, 1, 1),
-            bias=False,
-        )
-        pre_norm_module = norm(
-            num_features=dim_inner, eps=norm_eps, momentum=norm_momentum
-        )
-        pre_act_module = None if pool_act is None else pool_act()
-
-        if pool_kernel_size is None:
-            pool_module = nn.AdaptiveAvgPool3d((1, 1, 1))
-        else:
-            pool_module = nn.AvgPool3d(pool_kernel_size, stride=1)
-
-        post_conv_module = nn.Conv3d(
-            in_channels=dim_inner,
-            out_channels=dim_out,
-            kernel_size=(1, 1, 1),
-            bias=False,
-        )
-
-        if bn_lin5_on:
-            post_norm_module = norm(
-                num_features=dim_out, eps=norm_eps, momentum=norm_momentum
-            )
-        else:
-            post_norm_module = None
-        post_act_module = None if pool_act is None else pool_act()
-
-        projected_pool_module = ProjectedPool(
-            pre_conv=pre_conv_module,
-            pre_norm=pre_norm_module,
-            pre_act=pre_act_module,
-            pool=pool_module,
-            post_conv=post_conv_module,
-            post_norm=post_norm_module,
-            post_act=post_act_module,
-        )
-
-        if activation is None:
-            activation_module = None
-        elif activation == nn.Softmax:
-            activation_module = activation(dim=1)
-        elif activation == nn.Sigmoid:
-            activation_module = activation()
-        else:
-            raise NotImplementedError(
-                "{} is not supported as an activation" "function.".format(activation)
-            )
-
-        if output_with_global_average:
-            output_pool = nn.AdaptiveAvgPool3d(1)
-            proj_linear = nn.Linear(dim_out, num_classes, bias=True)
-        else:
-            proj_linear = None
-            output_pool = None
-        self.fuse_conv = ResNetBasicHead(
-            proj=proj_linear,
-            activation=activation_module,
-            pool=projected_pool_module,
-            dropout=nn.Dropout(dropout_rate) if dropout_rate > 0 else None,
-            output_pool=output_pool,
-        )
-
-    def forward(self, cx, sx) -> torch.Tensor:
-        return self.fuse_conv(torch.cat([cx[-2], sx[-2]], dim=1))
-
-
-class CAT(nn.Module):
-    def __init__(
-        self,
-        dim_in: int,
-        dim_inner: int,
-        dim_out: int,
-    ) -> nn.Module:
-        self.dim_in = dim_in
-        self.dim_out = dim_out
-        self.fuse_conv = create_x3d_bottleneck_block(2 * dim_in, dim_inner, dim_out)
-
-    def forward(self, cx, sx) -> torch.Tensor:
-        fx = torch.cat([cx, sx])
-        fx = self.fuse_conv(fx)
-        return fx, None
+    return CVFM(dim_in, dim_out, **kwargs)
 
 
 class CVFM(nn.Module):
-    def __init__(
-        self,
-        num_classes: int,
-        dim_in: int = 192,
-        dim_inner: int = 432,
-        dim_out: int = 2048,
-        # Pooling configs.
-        pool_act: Callable = nn.ReLU,
-        pool_kernel_size: Tuple[int] = (16, 16, 16),
-        # BN configs.
-        norm: Callable = nn.BatchNorm3d,
-        norm_eps: float = 1e-5,
-        norm_momentum: float = 0.1,
-        bn_lin5_on=False,
-        # Dropout configs.
-        dropout_rate: float = 0.5,
-        # Activation configs.
-        activation: bool = None,
-        # Output configs.
-        output_with_global_average: bool = False,
-    ):
-        super(CVFM, self).__init__()
-        self.dim_in = dim_in
-        self.dim_out = dim_out
-        self.gamma = nn.Parameter(torch.Tensor([0]))
-        pre_conv_module = nn.Conv3d(
-            in_channels=dim_in,
-            out_channels=dim_inner,
-            kernel_size=(1, 1, 1),
-            bias=False,
-        )
-        pre_norm_module = norm(
-            num_features=dim_inner, eps=norm_eps, momentum=norm_momentum
-        )
-        pre_act_module = None if pool_act is None else pool_act()
-
-        if pool_kernel_size is None:
-            pool_module = nn.AdaptiveAvgPool3d((1, 1, 1))
-        else:
-            pool_module = nn.AvgPool3d(pool_kernel_size, stride=1)
-
-        post_conv_module = nn.Conv3d(
-            in_channels=dim_inner,
-            out_channels=dim_out,
-            kernel_size=(1, 1, 1),
-            bias=False,
-        )
-
-        if bn_lin5_on:
-            post_norm_module = norm(
-                num_features=dim_out, eps=norm_eps, momentum=norm_momentum
-            )
-        else:
-            post_norm_module = None
-        post_act_module = None if pool_act is None else pool_act()
-
-        projected_pool_module = ProjectedPool(
-            pre_conv=pre_conv_module,
-            pre_norm=pre_norm_module,
-            pre_act=pre_act_module,
-            pool=pool_module,
-            post_conv=post_conv_module,
-            post_norm=post_norm_module,
-            post_act=post_act_module,
-        )
-
-        if activation is None:
-            activation_module = None
-        elif activation == nn.Softmax:
-            activation_module = activation(dim=1)
-        elif activation == nn.Sigmoid:
-            activation_module = activation()
-        else:
-            raise NotImplementedError(
-                "{} is not supported as an activation" "function.".format(activation)
-            )
-
-        if output_with_global_average:
-            output_pool = nn.AdaptiveAvgPool3d(1)
-            proj_linear = nn.Linear(dim_out, num_classes, bias=True)
-        else:
-            proj_linear = None
-            output_pool = None
-        self.fuse_conv = ResNetBasicHead(
-            proj=proj_linear,
-            activation=activation_module,
-            pool=projected_pool_module,
-            dropout=nn.Dropout(dropout_rate) if dropout_rate > 0 else None,
-            output_pool=output_pool,
-        )
-        self.angle = torch.nn.Parameter(torch.tensor(0, dtype=torch.float32))
-        self.pi = torch.tensor(math.pi, dtype=torch.float32)
-
-    def forward(self, cx, sx) -> torch.Tensor:
-        tmp = torch.cos(self.pi * torch.sigmoid(self.angle)) + 1e-8
-        angle_tensor = (cx[-2] / tmp + sx[-2] / (1 - tmp)) * 0.5
-        pythagorean_tensor = torch.sqrt(cx[-2] ** 2 + sx[-2] ** 2)
-        out = angle_tensor + F.sigmoid(self.gamma) * pythagorean_tensor
-        out = self.fuse_conv(out)
-        return out, None
-
-
-class CVFMTrans(nn.Module):
     def __init__(
         self,
         num_classes: int,
@@ -1250,7 +828,7 @@ class CVFMTrans(nn.Module):
         num_heads: int = 4,
         expand_dim: int = 4,
     ):
-        super(CVFMTrans, self).__init__()
+        super(CVFM, self).__init__()
         self.dim_in = dim_in * expand_dim
         self.dim_out = dim_out
         self.dim_inner = dim_inner
@@ -3031,9 +2609,8 @@ class MARCLinear(nn.Module):
     A wrapper for nn.Linear with support of MARC method.
     """
 
-    def __init__(self, out_features, OVA=False, in_features=2048):
+    def __init__(self, out_features, in_features=2048):
         super().__init__()
-        self.OVA = OVA
         self.fc = nn.Linear(in_features, out_features, bias=True)
         self.output_pool = nn.AdaptiveAvgPool3d(output_size=1)
         self.a = torch.nn.Parameter(torch.ones(1, out_features))
@@ -3048,105 +2625,6 @@ class MARCLinear(nn.Module):
         w_norm = torch.norm(self.fc.weight.clone().detach(), dim=1)
         logit_after = self.a * logit_before + self.b * w_norm
         return logit_after
-
-
-class MARCLinear_OVA(nn.Module):
-    """
-    A wrapper for nn.Linear with support of MARC method.
-    """
-
-    def __init__(self, num_classes=4, out_features=1, in_features=2048):
-        super().__init__()
-        self.num_classes = num_classes
-        self.fc0 = nn.Linear(in_features, out_features, bias=True)
-        self.a0 = torch.nn.Parameter(torch.ones(1, out_features))
-        self.b0 = torch.nn.Parameter(torch.zeros(1, out_features))
-
-        if self.num_classes >= 5:
-            self.fc1 = nn.Linear(in_features, out_features, bias=True)
-            self.a1 = torch.nn.Parameter(torch.ones(1, out_features))
-            self.b1 = torch.nn.Parameter(torch.zeros(1, out_features))
-
-        self.fc2a = nn.Linear(in_features, out_features, bias=True)
-        self.a2a = torch.nn.Parameter(torch.ones(1, out_features))
-        self.b2a = torch.nn.Parameter(torch.zeros(1, out_features))
-
-        self.fc2b = nn.Linear(in_features, out_features, bias=True)
-        self.a2b = torch.nn.Parameter(torch.ones(1, out_features))
-        self.b2b = torch.nn.Parameter(torch.zeros(1, out_features))
-
-        self.fc3 = nn.Linear(in_features, out_features, bias=True)
-        self.a3 = torch.nn.Parameter(torch.ones(1, out_features))
-        self.b3 = torch.nn.Parameter(torch.zeros(1, out_features))
-
-        self.output_pool = nn.AdaptiveAvgPool3d(output_size=1)
-
-    def forward(self, logit, *args):
-        logit = logit.permute((0, 2, 3, 4, 1))
-
-        logit_before0 = self.fc0(logit)
-        logit_before0 = logit_before0.permute((0, 4, 1, 2, 3))
-        logit_before0 = self.output_pool(logit_before0)
-        logit_before0 = logit_before0.view(logit_before0.shape[0], -1)
-        w_norm0 = torch.norm(self.fc0.weight.clone().detach(), dim=1)
-        logit_before0 = self.a0 * logit_before0 + self.b0 * w_norm0
-
-        if self.num_classes >= 5:
-            logit_before1 = self.fc1(logit)
-            logit_before1 = logit_before1.permute((0, 4, 1, 2, 3))
-            logit_before1 = self.output_pool(logit_before1)
-            logit_before1 = logit_before1.view(logit_before1.shape[0], -1)
-            w_norm1 = torch.norm(self.fc1.weight.clone().detach(), dim=1)
-            logit_before1 = self.a1 * logit_before1 + self.b1 * w_norm1
-        else:
-            logit_before1 = None
-
-        logit_before2a = self.fc2a(logit)
-        logit_before2a = logit_before2a.permute((0, 4, 1, 2, 3))
-        logit_before2a = self.output_pool(logit_before2a)
-        logit_before2a = logit_before2a.view(logit_before2a.shape[0], -1)
-        w_norm2a = torch.norm(self.fc2a.weight.clone().detach(), dim=1)
-        logit_before2a = self.a2a * logit_before2a + self.b2a * w_norm2a
-
-        logit_before2b = self.fc2b(logit)
-        logit_before2b = logit_before2b.permute((0, 4, 1, 2, 3))
-        logit_before2b = self.output_pool(logit_before2b)
-        logit_before2b = logit_before2b.view(logit_before2b.shape[0], -1)
-        w_norm2b = torch.norm(self.fc2b.weight.clone().detach(), dim=1)
-        logit_before2b = self.a2b * logit_before2b + self.b2b * w_norm2b
-
-        logit_before3 = self.fc3(logit)
-        logit_before3 = logit_before3.permute((0, 4, 1, 2, 3))
-        logit_before3 = self.output_pool(logit_before3)
-        logit_before3 = logit_before3.view(logit_before3.shape[0], -1)
-        w_norm3 = torch.norm(self.fc3.weight.clone().detach(), dim=1)
-        logit_before3 = self.a3 * logit_before3 + self.b3 * w_norm3
-
-        if self.num_classes >= 5:
-            return [
-                torch.cat(
-                    [
-                        logit_before0,
-                        logit_before1,
-                        logit_before2a,
-                        logit_before2b,
-                        logit_before3,
-                    ],
-                    dim=1,
-                )
-            ]
-        else:
-            return [
-                torch.cat(
-                    [
-                        logit_before0,
-                        logit_before2a,
-                        logit_before2b,
-                        logit_before3,
-                    ],
-                    dim=1,
-                )
-            ]
 
 
 class SideOut(nn.Module):
@@ -3177,11 +2655,9 @@ class SideOut(nn.Module):
         # Output configs.
         output_with_global_average: bool = False,
         out_features=5,
-        OVA=False,
         **kwargs,
     ):
         super().__init__()
-        self.OVA = OVA
         self.stem = create_x3d_res_block(
             dim_in=dim_in,
             dim_inner=dim_inner,
@@ -3189,7 +2665,7 @@ class SideOut(nn.Module):
             conv_kernel_size=conv_kernel_size,
             conv_stride=conv_stride,
         )
-        self.marc = MARCLinear(out_features=num_classes, in_features=dim_out, OVA=OVA)
+        self.marc = MARCLinear(out_features=num_classes, in_features=dim_out)
         self.head = create_x3d_head(
             dim_in=dim_inner,
             dim_inner=int(dim_inner * 1.25),
@@ -3284,17 +2760,9 @@ class DVCNet(nn.Module):
             self.visual_bottom,
         )
         if self.use_marc:
-            self.coronal_marc_linear = MARCLinear(out_features=model_num_class, OVA=OVA)
-            self.sagittal_marc_linear = MARCLinear(
-                out_features=model_num_class, OVA=OVA
-            )
-            self.fusion_marc_linear = MARCLinear(out_features=model_num_class, OVA=OVA)
-            if OVA:
-                self.fusion_marc_linear_ova = MARCLinear_OVA(
-                    num_classes=model_num_class, out_features=1
-                )
-            else:
-                self.fusion_marc_linear_ova = None
+            self.coronal_marc_linear = MARCLinear(out_features=model_num_class)
+            self.sagittal_marc_linear = MARCLinear(out_features=model_num_class)
+            self.fusion_marc_linear = MARCLinear(out_features=model_num_class)
             head_output_with_global_average = False
         self.sagittal_model = create_x3d(
             input_channel,
@@ -3331,44 +2799,8 @@ class DVCNet(nn.Module):
         )
 
         self.coronal_model = copy.deepcopy(self.sagittal_model)
-        if self.use_fusion == "ADD":
-            self.fusion_model = TMP_ADD(
-                num_classes=model_num_class,
-                pool_kernel_size=(
-                    input_clip_length,
-                    self.visual_bottom,
-                    self.visual_bottom,
-                ),
-            )
-        elif self.use_fusion == "DynamicADD":
-            self.fusion_model = DynamicADD(
-                num_classes=model_num_class,
-                pool_kernel_size=(
-                    input_clip_length,
-                    self.visual_bottom,
-                    self.visual_bottom,
-                ),
-            )
-        elif self.use_fusion == "CONCAT":
-            self.fusion_model = TMP_CAT(
-                num_classes=model_num_class,
-                pool_kernel_size=(
-                    input_clip_length,
-                    self.visual_bottom,
-                    self.visual_bottom,
-                ),
-            )
-        elif self.use_fusion == "CVFM":
+        if self.use_fusion == "CVFM":
             self.fusion_model = CVFM(
-                num_classes=model_num_class,
-                pool_kernel_size=(
-                    input_clip_length,
-                    self.visual_bottom,
-                    self.visual_bottom,
-                ),
-            )
-        elif self.use_fusion == "CVFMTrans":
-            self.fusion_model = CVFMTrans(
                 num_classes=model_num_class,
                 att_size=self.att_size,
                 pool_kernel_size=(
@@ -3601,8 +3033,6 @@ class DVCNet(nn.Module):
             fuse_output, help_tensor = self.fusion_model(
                 cor_middel_list, sag_middel_list
             )
-            if self.fusion_marc_linear_ova:
-                fuse_output_ova = self.fusion_marc_linear_ova(fuse_output)
             fuse_output = self.fusion_marc_linear(fuse_output)
         else:
             fuse_output = self.fusion_marc_linear(
@@ -3653,7 +3083,7 @@ if __name__ == "__main__":
         input_crop_size=visual,
         cor_pretrained=None,  # "/ai/mnt/code/DSFNet_MTICI/Src/X3D_M-Kinect.pyth",  # "/ai/mnt/code/DSFNet_MTICI/output_runs/mTICI_Single_LMDB/X3D/SINGLE_VIEW-COR-Fold1/03_30-22_32#oversample_weighted-fixnormvalue-crop-lmdb-visual32-use_marc-NLrs/Model/Best_Acc_Epoch_0080.pth",
         sag_pretrained=None,  # "/ai/mnt/code/DSFNet_MTICI/output_runs/mTICI_Single_LMDB/X3D/SINGLE_VIEW-SAG-Fold1/03_31-09_25#oversample_weighted-fixnormvalue-crop-lmdb-visual32-use_marc-NLrs/Model/Best_Acc_Epoch_0065.pth",
-        use_fusion="CVFMTrans",
+        use_fusion="CVFM",
         model_num_class=4,
         deep_super=[True, True, True, True],
         OVA=False,
