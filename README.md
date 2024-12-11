@@ -82,4 +82,4 @@ After inferencing, the results will be save in AmTICIS_results.csv, you can sort
 License
 --------
 
-The CVFSNet code is released under MIT License (see LICENSE file for details).
+The CVFSNet code is released under GPL-3.0 license (see LICENSE file for details).
