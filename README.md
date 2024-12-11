@@ -26,7 +26,9 @@ Set up the dicom file dir, and use the code as:
 <pre><code> python Data/prepro.py dcm_dir /dir --time_depth 8 16 24 32 --visual_size 256</pre></code>
 
 It will generate the lmdb database in the Data dir, named as "Relabeled_V256". For your convienience, we provide the lmdb database, download line as in :
-(database is uploading to the Aliyunpan)
+Relabeled_V256 (about 400G)
+https://www.alipan.com/s/k7D79xQbprP
+Extracted code: l8o0 
 
 
 Step 3 Setup the config file
