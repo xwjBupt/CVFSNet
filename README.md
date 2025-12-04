@@ -1,4 +1,4 @@
-**CVFSNet: A Cross View Fusion Scoring Network for end-to-end mTICI Scoring (submitted to MEDIA)**
+**CVFSNet: A Cross View Fusion Scoring Network for end-to-end mTICI Scoring**
 ==============================================================================================================================
 
 Created by Weijin Xu, Tao Tan, Huihua Yang, Wentao Liu, Yifu Chen, Ling Zhang, Xipeng Pan, Feng Gao, Yiming Deng, Theo
@@ -16,26 +16,16 @@ Introduction
 ------------
 The modified Thrombolysis In Cerebral Infarction (mTICI) score serves as one of the key clinical indicators to assess the success of the Mechanical Thrombectomy (MT), requiring physicians to inspect Digital Subtraction Angiography (DSA) images in both the coronal and sagittal views. However, assessing mTICI scores manually is time-consuming and has considerable observer variability. An automatic, objective, and end-to-end method for assigning mTICI scores may effectively avoid observer errors. Therefore, in this paper, we propose a novel Cross View Fusion Scoring Network (CVFSNet) for automatic, objective, and end-to-end mTICI scoring, which employs dual branches to simultaneously extract spatial-temporal features from coronal and sagittal views. Then, a novel Cross View Fusion Module (CVFM) is introduced to fuse the features from two views, which explores the positional characteristics of coronal and sagittal views to generate a pseudo-oblique sagittal feature and ultimately constructs more representative features to enhance the scoring performance. In addition, we provide AmTICIS, a newly collected and the first publicly available DSA image dataset with expert annotations for automatic mTICI scoring, which can effectively promote researchers to conduct studies of ischemic stroke based on DSA images and finally help patients get better medical treatment. Extensive experimentation results demonstrate the promising performance of our methods and the validity of the cross-view fusion module. 
 
-Step 1 AmTICIS data request
+Step 1 Download the AmTICIS dataset
 ------------
-The original AmTICIS will be opened after our paper is officially accepted, you can use the lmdb databae we generated, currently.
-
-Step 2 Preprocess the dicom file
-------------------------
-Set up the dicom file dir, and use the code as:
-<pre><code> python Data/prepro.py dcm_dir /dir --time_depth 8 16 24 32 --visual_size 256</pre></code>
-
-It will generate the lmdb database in the Data dir, named as "Relabeled_V256". For your convienience, we provide the lmdb database, download line as in :
-Relabeled_V256 (about 400G)
-https://www.alipan.com/s/k7D79xQbprP
-Extracted code: l8o0 
+The AmTICIS have been publish in zenodo under Creative Commons Attribution Non Commercial No Derivatives 4.0 International license at https://zenodo.org/records/17790966. 
 
 
-Step 3 Setup the config file
+Step 2 Setup the config file
 ------------------------
 Change the training setup as you want in config.py
 
-Step 4 Train and Val
+Step 3 Train and Val
 ------------------------
 you can use the follow command to train and val,
 
@@ -60,7 +50,7 @@ EG: /ai/mnt/code/CVFSNet/output_runs/AmTICIS/DEBUG/DUAL_VIEW-FUSE01-T08#V256-REN
 $NOTE$ if metrics have been stop updating for 70 (_C.BASIC.Early_stop) epochs, it will automaticlly stop training and going to inference.
 
 
-Step 5 Inference
+Step 4 Inference
 ------------------------
 
 <pre><code>python infer.py --infer_path $infer_path$ --epochs $epoch_id$</pre></code>
@@ -74,12 +64,19 @@ the saved data shown as following:
 ![](Show//Output.png)
 
 
-Step 6 Check Results
+Step 5 Check Results
 ------------------------
 After inferencing, the results will be save in AmTICIS_results.csv, you can sorting or filtering the results from different methods.
+
+Citation
+------------------------
+
+if you find the CVFSNet and AmTICIS useful, please cite below:
+
+Xu, W., Tan, T., Yang, H., Liu, W., Chen, Y., Zhang, L., ... & Su, R. (2025). CVFSNet: A Cross View Fusion Scoring Network for end-to-end mTICI scoring. Medical Image Analysis, 102, 103508.
 
 
 License
 --------
 
-The CVFSNet code is released under GPL-3.0 license (see LICENSE file for details).
+The CVFSNet code and AmTICIS dataset are released under Creative Commons Attribution Non Commercial No Derivatives 4.0 International license.
