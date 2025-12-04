@@ -14,6 +14,7 @@ import pdb
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import cv2
+import SimpleITK as sitk
 import lmdb
 import time
 import torch.nn.functional as F
@@ -31,34 +32,21 @@ import copy
 class AmTICIS(data.Dataset):
     def __init__(
         self,
+        filedir,
+        json_file_dir,
         visual_size=256,
         fast_time_size=8,
         state="train",
         fuse01=True,
-        json_file_dir=None,
         use_trans=True,
         crop=(0.2, 0.2, 0.2, 0.2),
         binary=False,
         **kwargs
     ):
-        if json_file_dir is None:
-            json_file_dir = os.path.join(
-                os.path.dirname(os.path.realpath(__file__)),
-                "ReNamedAll.json",
-            )
         all_samples = read_json(json_file_dir)
-        self.env = lmdb.open(
-            os.path.join(
-                os.path.dirname(os.path.realpath(__file__)),
-                "Relabeled_V%03d/" % visual_size,
-            ),
-            readonly=True,
-            lock=False,
-            readahead=False,
-            meminit=False,
-        )
         self.binary = binary
         self.fuse01 = fuse01
+        self.filedir = filedir
         if self.binary:
             self.fuse01 = False
         self.visual_size = visual_size
@@ -101,11 +89,15 @@ class AmTICIS(data.Dataset):
     def __getitem__(self, index):
         self.name = self.samples[index]
         self.label = self.__map_label(self.name)
-        cor_view, sag_view = self.__load_arrays(
-            self.name, fast_depth=self.fast_time_size, visual=self.visual_size
-        )
+        cor_view, sag_view = self.__load_arrays(self.name, self.filedir)
         raw_cor_view = copy.deepcopy(cor_view)
         raw_sag_view = copy.deepcopy(sag_view)
+        cor_view = self.__resize_view(
+            cor_view, self.fast_time_size, self.visual_size
+        )  # CTHW C=1
+        sag_view = self.__resize_view(
+            sag_view, self.fast_time_size, self.visual_size
+        )  # CTHW C=1
         if self.use_trans and self.state == "train":
             cor_view = self.train_trans(cor_view).contiguous()
             sag_view = self.train_trans(sag_view).contiguous()
@@ -134,20 +126,30 @@ class AmTICIS(data.Dataset):
         self.labels_list = labels_list
         return weighted_list
 
-    def __load_arrays(self, file_dir, fast_depth, visual):
-        with self.env.begin(write=False) as txn:
-            cor_view = pickle.loads(
-                txn.get(("T%02d#V%03d#" % (fast_depth, visual) + file_dir).encode())
-            )
-            sag_view = pickle.loads(
-                txn.get(
-                    (
-                        "T%02d#V%03d#" % (fast_depth, visual)
-                        + file_dir.replace("_C", "_S")
-                    ).encode()
-                )
-            )
+    def __load_arrays(self, name, file_dir):
+
+        cor_nii_name = os.path.join(file_dir, name).replace(".dcm", ".nii.gz")
+        sag_nii_name = (
+            os.path.join(file_dir, name).replace(".dcm", ".nii.gz").replace("_C", "_S")
+        )
+        cor_view = sitk.GetArrayFromImage(sitk.ReadImage(cor_nii_name))  # T,H,W
+        sag_view = sitk.GetArrayFromImage(sitk.ReadImage(sag_nii_name))  # T,H,W
         return cor_view, sag_view
+
+    def __resize_view(self, view, temporal, visual):
+        view = (
+            torch.tensor(view, dtype=torch.float32)
+            .permute(2, 0, 1)
+            .unsqueeze(0)
+            .unsqueeze(0)
+        )
+        rv = F.interpolate(
+            view,
+            (temporal, visual, visual),
+            mode="trilinear",
+            align_corners=True,
+        ).contiguous()[0]
+        return rv
 
     def __map_label(self, file_dir):
         label_str = file_dir.split("/")[-1].split("_")[1]
